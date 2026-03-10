@@ -25,7 +25,7 @@ all-transports = ["stdio", "http", "websocket", "grpc", "unix-socket"]
 async-trait = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.35", features = ["process", "io-util", "sync", "time", "rt", "macros", "fs"] }
+tokio = { version = "1.35", features = ["process", "io-util", "io-std", "sync", "time", "rt", "macros", "fs"] }
 tracing = "0.1"
 anyhow = "1.0"
 thiserror = "2.0"
