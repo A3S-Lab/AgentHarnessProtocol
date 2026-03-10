@@ -182,3 +182,156 @@ cargo test --features websocket
 - Add more authentication methods (mTLS, OAuth)
 - Add metrics and observability examples
 - Add integration tests
+
+## TypeScript Examples
+
+### HTTP Server
+
+```bash
+# Install dependencies
+cd examples
+npm install
+
+# Run HTTP server
+npm run http
+# Or directly:
+npx ts-node http_server.ts
+
+# Test with curl
+curl -X POST http://localhost:8080/ahp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "1",
+    "method": "ahp/handshake",
+    "params": {
+      "protocol_version": "2.0",
+      "agent_info": {
+        "framework": "a3s-code",
+        "version": "1.0.0"
+      }
+    }
+  }'
+```
+
+### WebSocket Server
+
+```bash
+# Run WebSocket server
+npm run websocket
+# Or directly:
+npx ts-node websocket_server.ts
+
+# Test with wscat
+npm install -g wscat
+wscat -c ws://localhost:8081/ahp
+> {"jsonrpc":"2.0","id":"1","method":"ahp/handshake","params":{"protocol_version":"2.0","agent_info":{"framework":"test","version":"1.0.0"}}}
+```
+
+## Python Examples
+
+### HTTP Server
+
+```bash
+# Install dependencies
+pip install flask
+
+# Run HTTP server
+python http_server.py
+
+# Or with custom port
+python http_server.py 8080
+
+# Test with curl
+curl -X POST http://localhost:8080/ahp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "1",
+    "method": "ahp/handshake",
+    "params": {
+      "protocol_version": "2.0",
+      "agent_info": {
+        "framework": "a3s-code",
+        "version": "1.0.0"
+      }
+    }
+  }'
+```
+
+### WebSocket Server
+
+```bash
+# Install dependencies
+pip install websockets
+
+# Run WebSocket server
+python websocket_server.py
+
+# Or with custom port
+python websocket_server.py 8081
+
+# Test with Python client
+python -c "
+import asyncio
+import websockets
+import json
+
+async def test():
+    async with websockets.connect('ws://localhost:8081/ahp') as ws:
+        msg = {
+            'jsonrpc': '2.0',
+            'id': '1',
+            'method': 'ahp/handshake',
+            'params': {
+                'protocol_version': '2.0',
+                'agent_info': {'framework': 'test', 'version': '1.0.0'}
+            }
+        }
+        await ws.send(json.dumps(msg))
+        response = await ws.recv()
+        print(response)
+
+asyncio.run(test())
+"
+```
+
+## TypeScript/Python Server Features
+
+All TypeScript and Python example servers implement:
+
+- **Handshake**: Capability negotiation with protocol version check
+- **Event Handling**: Pre-action, post-action, pre-prompt events
+- **Depth-Aware Policy**: Stricter rules for nested agents (depth > 0)
+- **Query Support**: Interactive decision-making with alternatives
+- **Batch Processing**: Handle multiple events in a single request
+- **Dangerous Command Detection**: Block destructive operations
+- **Comprehensive Logging**: Track all events and decisions
+
+## Production Deployment
+
+For production use:
+
+**TypeScript:**
+```bash
+# Compile TypeScript
+npx tsc http_server.ts
+
+# Run with PM2
+npm install -g pm2
+pm2 start http_server.js -i 4
+
+# Or with Node.js cluster
+node http_server.js
+```
+
+**Python:**
+```bash
+# Run with Gunicorn (HTTP)
+pip install gunicorn
+gunicorn -w 4 -b 0.0.0.0:8080 http_server:app
+
+# Run with systemd (WebSocket)
+sudo systemctl enable ahp-websocket.service
+sudo systemctl start ahp-websocket.service
+```
