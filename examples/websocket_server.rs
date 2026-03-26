@@ -1,6 +1,6 @@
 //! WebSocket server example
 
-use a3s_ahp::{AhpServer, EventHandler, AhpEvent, Decision, QueryRequest, QueryResponse, Result};
+use a3s_ahp::{AhpEvent, AhpServer, Decision, EventHandler, QueryRequest, QueryResponse, Result};
 use async_trait::async_trait;
 use std::sync::Arc;
 
@@ -13,7 +13,9 @@ impl EventHandler for SimpleHandler {
         match event.event_type {
             a3s_ahp::EventType::PreAction => {
                 // Check if command is dangerous
-                if let Some(command) = event.payload.get("arguments")
+                if let Some(command) = event
+                    .payload
+                    .get("arguments")
                     .and_then(|args| args.get("command"))
                     .and_then(|cmd| cmd.as_str())
                 {
@@ -45,7 +47,9 @@ impl EventHandler for SimpleHandler {
     }
 
     async fn handle_query(&self, query: &QueryRequest) -> Result<QueryResponse> {
-        let question = query.payload.get("question")
+        let question = query
+            .payload
+            .get("question")
             .and_then(|q| q.as_str())
             .unwrap_or("");
 

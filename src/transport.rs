@@ -1,6 +1,6 @@
 //! Transport layer abstractions
 
-use crate::{AhpRequest, AhpResponse, AhpNotification, AuthConfig, Result};
+use crate::{AhpNotification, AhpRequest, AhpResponse, AuthConfig, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -8,37 +8,32 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone)]
 pub enum Transport {
     /// stdio transport (local child process)
-    Stdio {
-        program: String,
-        args: Vec<String>,
-    },
-    
+    Stdio { program: String, args: Vec<String> },
+
     /// HTTP transport (remote harness server)
     #[cfg(feature = "http")]
     Http {
         url: String,
         auth: Option<AuthConfig>,
     },
-    
+
     /// WebSocket transport (bidirectional streaming)
     #[cfg(feature = "websocket")]
     WebSocket {
         url: String,
         auth: Option<AuthConfig>,
     },
-    
+
     /// gRPC transport (high-performance RPC)
     #[cfg(feature = "grpc")]
     Grpc {
         endpoint: String,
         auth: Option<AuthConfig>,
     },
-    
+
     /// Unix socket transport (local IPC)
     #[cfg(feature = "unix-socket")]
-    UnixSocket {
-        path: String,
-    },
+    UnixSocket { path: String },
 }
 
 /// Transport configuration
@@ -64,10 +59,10 @@ impl Default for TransportConfig {
 pub trait TransportLayer: Send + Sync {
     /// Send a request and wait for response
     async fn send_request(&self, request: AhpRequest) -> Result<AhpResponse>;
-    
+
     /// Send a notification (fire-and-forget, no response expected)
     async fn send_notification(&self, notification: AhpNotification) -> Result<()>;
-    
+
     /// Close the transport connection
     async fn close(&self) -> Result<()>;
 }

@@ -48,24 +48,23 @@
 //! # }
 //! ```
 
-pub mod client;
-pub mod server;
-pub mod protocol;
-pub mod transport;
 pub mod auth;
+pub mod client;
 pub mod error;
+pub mod protocol;
+pub mod server;
+pub mod transport;
 
 // Re-exports
-pub use client::AhpClient;
-pub use server::AhpServer;
-pub use protocol::{
-    AhpEvent, AhpRequest, AhpResponse, AhpNotification,
-    EventType, Decision, HandshakeRequest, HandshakeResponse,
-    QueryRequest, QueryResponse, BatchRequest, BatchResponse,
-};
-pub use transport::{Transport, TransportConfig};
 pub use auth::{AuthConfig, AuthMethod};
+pub use client::AhpClient;
 pub use error::{AhpError, Result};
+pub use protocol::{
+    AhpEvent, AhpNotification, AhpRequest, AhpResponse, BatchRequest, BatchResponse, Decision,
+    EventType, HandshakeRequest, HandshakeResponse, QueryRequest, QueryResponse,
+};
+pub use server::AhpServer;
+pub use transport::{Transport, TransportConfig};
 
 /// Protocol version
 pub const PROTOCOL_VERSION: &str = "2.0";

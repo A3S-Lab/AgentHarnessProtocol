@@ -1,9 +1,9 @@
 //! HTTP transport implementation
 
-use crate::{AhpRequest, AhpResponse, AhpNotification, Result, AhpError, AuthConfig, AuthMethod};
 use crate::transport::TransportLayer;
+use crate::{AhpError, AhpNotification, AhpRequest, AhpResponse, AuthConfig, AuthMethod, Result};
 use async_trait::async_trait;
-use reqwest::{Client, header};
+use reqwest::{header, Client};
 use std::sync::Arc;
 
 /// HTTP transport - communicates with remote harness server via HTTP
@@ -23,13 +23,20 @@ impl HttpTransport {
         if let Some(ref auth_config) = auth {
             match &auth_config.method {
                 AuthMethod::ApiKey { key } => {
-                    headers.insert("X-API-Key", key.parse()
-                        .map_err(|_| AhpError::AuthFailed("Invalid API key".to_string()))?);
+                    headers.insert(
+                        "X-API-Key",
+                        key.parse()
+                            .map_err(|_| AhpError::AuthFailed("Invalid API key".to_string()))?,
+                    );
                 }
                 AuthMethod::Bearer { token } => {
                     let auth_value = format!("Bearer {}", token);
-                    headers.insert(header::AUTHORIZATION, auth_value.parse()
-                        .map_err(|_| AhpError::AuthFailed("Invalid bearer token".to_string()))?);
+                    headers.insert(
+                        header::AUTHORIZATION,
+                        auth_value.parse().map_err(|_| {
+                            AhpError::AuthFailed("Invalid bearer token".to_string())
+                        })?,
+                    );
                 }
                 _ => {}
             }
@@ -52,7 +59,8 @@ impl HttpTransport {
 #[async_trait]
 impl TransportLayer for HttpTransport {
     async fn send_request(&self, request: AhpRequest) -> Result<AhpResponse> {
-        let response = self.client
+        let response = self
+            .client
             .post(&self.url)
             .json(&request)
             .send()
@@ -67,7 +75,9 @@ impl TransportLayer for HttpTransport {
             )));
         }
 
-        let ahp_response: AhpResponse = response.json().await
+        let ahp_response: AhpResponse = response
+            .json()
+            .await
             .map_err(|e| AhpError::Protocol(format!("Failed to parse response: {}", e)))?;
 
         Ok(ahp_response)
@@ -75,7 +85,8 @@ impl TransportLayer for HttpTransport {
 
     async fn send_notification(&self, notification: AhpNotification) -> Result<()> {
         // For HTTP, notifications are sent as POST requests but we don't wait for response
-        let _ = self.client
+        let _ = self
+            .client
             .post(&self.url)
             .json(&notification)
             .send()
@@ -105,10 +116,7 @@ impl HttpServer {
     /// Run the HTTP server on the specified address
     #[cfg(feature = "http")]
     pub async fn run(self, addr: impl Into<std::net::SocketAddr>) -> Result<()> {
-        use axum::{
-            routing::post,
-            Router,
-        };
+        use axum::{routing::post, Router};
         use tower_http::trace::TraceLayer;
 
         let app = Router::new()
@@ -116,10 +124,12 @@ impl HttpServer {
             .layer(TraceLayer::new_for_http())
             .with_state(self.server);
 
-        let listener = tokio::net::TcpListener::bind(addr.into()).await
+        let listener = tokio::net::TcpListener::bind(addr.into())
+            .await
             .map_err(|e| AhpError::Transport(format!("Failed to bind: {}", e)))?;
 
-        axum::serve(listener, app).await
+        axum::serve(listener, app)
+            .await
             .map_err(|e| AhpError::Transport(format!("Server error: {}", e)))?;
 
         Ok(())

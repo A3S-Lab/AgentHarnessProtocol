@@ -14,24 +14,20 @@ pub struct AuthConfig {
 pub enum AuthMethod {
     /// No authentication (local stdio, trusted environment)
     None,
-    
+
     /// API key authentication
-    ApiKey {
-        key: String,
-    },
-    
+    ApiKey { key: String },
+
     /// Bearer token authentication
-    Bearer {
-        token: String,
-    },
-    
+    Bearer { token: String },
+
     /// Mutual TLS (client and server certificates)
     MutualTls {
         cert_path: String,
         key_path: String,
         ca_path: Option<String>,
     },
-    
+
     /// OAuth 2.0
     OAuth {
         client_id: String,
@@ -63,7 +59,9 @@ impl AuthConfig {
 
     pub fn bearer(token: impl Into<String>) -> Self {
         Self {
-            method: AuthMethod::Bearer { token: token.into() },
+            method: AuthMethod::Bearer {
+                token: token.into(),
+            },
         }
     }
 }

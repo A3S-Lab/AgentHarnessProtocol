@@ -1,6 +1,6 @@
 //! WebSocket client example
 
-use a3s_ahp::{AhpClient, Transport, EventType, Decision};
+use a3s_ahp::{AhpClient, Decision, EventType, Transport};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -8,32 +8,35 @@ async fn main() -> anyhow::Result<()> {
     let client = AhpClient::new(Transport::WebSocket {
         url: "ws://localhost:8081/ahp".into(),
         auth: None,
-    }).await?;
+    })
+    .await?;
 
     println!("Connected to WebSocket harness server");
 
     // Perform handshake
     let handshake = client.handshake().await?;
     println!("✓ Handshake successful");
-    println!("  Harness: {} v{}",
-        handshake.harness_info.name,
-        handshake.harness_info.version
+    println!(
+        "  Harness: {} v{}",
+        handshake.harness_info.name, handshake.harness_info.version
     );
 
     // Send multiple events in sequence
     for i in 1..=5 {
         println!("\n--- Event {} ---", i);
 
-        let decision = client.send_event(
-            EventType::PreAction,
-            serde_json::json!({
-                "action_type": "tool_call",
-                "tool_name": "bash",
-                "arguments": {
-                    "command": format!("echo 'Test {}'", i)
-                }
-            })
-        ).await?;
+        let decision = client
+            .send_event(
+                EventType::PreAction,
+                serde_json::json!({
+                    "action_type": "tool_call",
+                    "tool_name": "bash",
+                    "arguments": {
+                        "command": format!("echo 'Test {}'", i)
+                    }
+                }),
+            )
+            .await?;
 
         match decision {
             Decision::Allow { .. } => println!("✓ Action {} allowed", i),
@@ -90,7 +93,10 @@ async fn main() -> anyhow::Result<()> {
     ];
 
     let batch_response = client.send_batch(events).await?;
-    println!("✓ Batch processed: {} decisions", batch_response.decisions.len());
+    println!(
+        "✓ Batch processed: {} decisions",
+        batch_response.decisions.len()
+    );
     for (i, decision) in batch_response.decisions.iter().enumerate() {
         match decision {
             Decision::Allow { .. } => println!("  [{}] Allow", i + 1),

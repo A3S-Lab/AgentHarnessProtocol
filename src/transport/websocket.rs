@@ -1,18 +1,20 @@
 //! WebSocket transport implementation
 
-use crate::{AhpRequest, AhpResponse, AhpNotification, Result, AhpError, AuthConfig, AuthMethod};
 use crate::transport::TransportLayer;
+use crate::{AhpError, AhpNotification, AhpRequest, AhpResponse, AuthConfig, AuthMethod, Result};
 use async_trait::async_trait;
-use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream, MaybeTlsStream};
-use tokio::net::TcpStream;
-use futures_util::{StreamExt, SinkExt};
-use tokio::sync::Mutex;
+use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::net::TcpStream;
+use tokio::sync::Mutex;
+use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
 /// WebSocket transport - bidirectional streaming communication
 pub struct WebSocketTransport {
-    write: Arc<Mutex<futures_util::stream::SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>,
+    write: Arc<
+        Mutex<futures_util::stream::SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
+    >,
     pending_requests: Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<AhpResponse>>>>,
 }
 
@@ -34,7 +36,8 @@ impl WebSocketTransport {
             }
         }
 
-        let (ws_stream, _) = connect_async(&url_string).await
+        let (ws_stream, _) = connect_async(&url_string)
+            .await
             .map_err(|e| AhpError::Transport(format!("WebSocket connection failed: {}", e)))?;
 
         let (write, read) = ws_stream.split();
@@ -90,7 +93,9 @@ impl TransportLayer for WebSocketTransport {
         // Send request
         let json = serde_json::to_string(&request)?;
         let mut write = self.write.lock().await;
-        write.send(Message::Text(json)).await
+        write
+            .send(Message::Text(json))
+            .await
             .map_err(|e| AhpError::Transport(format!("Failed to send: {}", e)))?;
         drop(write);
 
@@ -105,14 +110,18 @@ impl TransportLayer for WebSocketTransport {
     async fn send_notification(&self, notification: AhpNotification) -> Result<()> {
         let json = serde_json::to_string(&notification)?;
         let mut write = self.write.lock().await;
-        write.send(Message::Text(json)).await
+        write
+            .send(Message::Text(json))
+            .await
             .map_err(|e| AhpError::Transport(format!("Failed to send: {}", e)))?;
         Ok(())
     }
 
     async fn close(&self) -> Result<()> {
         let mut write = self.write.lock().await;
-        write.send(Message::Close(None)).await
+        write
+            .send(Message::Close(None))
+            .await
             .map_err(|e| AhpError::Transport(format!("Failed to close: {}", e)))?;
         Ok(())
     }
@@ -135,10 +144,14 @@ impl WebSocketServer {
         use tokio::net::TcpListener;
         use tokio_tungstenite::accept_async;
 
-        let listener = TcpListener::bind(addr.into()).await
+        let listener = TcpListener::bind(addr.into())
+            .await
             .map_err(|e| AhpError::Transport(format!("Failed to bind: {}", e)))?;
 
-        tracing::info!("WebSocket server listening on {}", listener.local_addr().unwrap());
+        tracing::info!(
+            "WebSocket server listening on {}",
+            listener.local_addr().unwrap()
+        );
 
         while let Ok((stream, addr)) = listener.accept().await {
             let server = self.server.clone();
@@ -159,10 +172,11 @@ async fn handle_connection(
     server: Arc<crate::AhpServer>,
     addr: std::net::SocketAddr,
 ) -> Result<()> {
-    use tokio_tungstenite::tungstenite::Message as WsMessage;
     use tokio_tungstenite::accept_async;
+    use tokio_tungstenite::tungstenite::Message as WsMessage;
 
-    let ws_stream = accept_async(stream).await
+    let ws_stream = accept_async(stream)
+        .await
         .map_err(|e| AhpError::Transport(format!("WebSocket handshake failed: {}", e)))?;
 
     tracing::info!("WebSocket connection established: {}", addr);
@@ -175,9 +189,11 @@ async fn handle_connection(
                 // Try to parse as request or notification
                 if let Ok(request) = serde_json::from_str::<AhpRequest>(&text) {
                     let response = server.handle_request(request).await;
-                    let json = serde_json::to_string(&response)
-                        .map_err(|e| AhpError::Serialization(e))?;
-                    write.send(WsMessage::Text(json)).await
+                    let json =
+                        serde_json::to_string(&response).map_err(|e| AhpError::Serialization(e))?;
+                    write
+                        .send(WsMessage::Text(json))
+                        .await
                         .map_err(|e| AhpError::Transport(format!("Failed to send: {}", e)))?;
                 } else if let Ok(notification) = serde_json::from_str::<AhpNotification>(&text) {
                     let _ = server.handle_notification(notification).await;
@@ -185,7 +201,9 @@ async fn handle_connection(
             }
             Ok(WsMessage::Close(_)) => break,
             Ok(WsMessage::Ping(data)) => {
-                write.send(WsMessage::Pong(data)).await
+                write
+                    .send(WsMessage::Pong(data))
+                    .await
                     .map_err(|e| AhpError::Transport(format!("Failed to send pong: {}", e)))?;
             }
             Err(e) => {

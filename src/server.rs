@@ -1,12 +1,11 @@
 //! AHP server implementation
 
+use crate::protocol::{HarnessConfig, HarnessInfo};
 use crate::{
-    AhpRequest, AhpResponse, AhpNotification, AhpEvent, EventType, Decision,
-    HandshakeRequest, HandshakeResponse,
-    QueryRequest, QueryResponse, BatchRequest, BatchResponse,
-    Result, AhpError, PROTOCOL_VERSION,
+    AhpError, AhpEvent, AhpNotification, AhpRequest, AhpResponse, BatchRequest, BatchResponse,
+    Decision, EventType, HandshakeRequest, HandshakeResponse, QueryRequest, QueryResponse, Result,
+    PROTOCOL_VERSION,
 };
-use crate::protocol::{HarnessInfo, HarnessConfig};
 use async_trait::async_trait;
 use std::sync::Arc;
 
@@ -15,19 +14,21 @@ use std::sync::Arc;
 pub trait EventHandler: Send + Sync {
     /// Handle a blocking event and return a decision
     async fn handle_event(&self, event: &AhpEvent) -> Result<Decision>;
-    
+
     /// Handle a notification (fire-and-forget)
     async fn handle_notification(&self, event: &AhpEvent) -> Result<()> {
         // Default: do nothing
         let _ = event;
         Ok(())
     }
-    
+
     /// Handle a query from the agent
     async fn handle_query(&self, query: &QueryRequest) -> Result<QueryResponse> {
         // Default: not supported
         let _ = query;
-        Err(AhpError::UnsupportedCapability("Query not supported".to_string()))
+        Err(AhpError::UnsupportedCapability(
+            "Query not supported".to_string(),
+        ))
     }
 }
 
@@ -61,7 +62,7 @@ impl AhpServer {
             },
         }
     }
-    
+
     /// Handle a JSON-RPC request
     pub async fn handle_request(&self, request: AhpRequest) -> AhpResponse {
         match request.method.as_str() {
@@ -72,7 +73,7 @@ impl AhpServer {
             _ => AhpResponse::error(request.id, -32601, "Method not found"),
         }
     }
-    
+
     /// Handle a JSON-RPC notification
     pub async fn handle_notification(&self, notification: AhpNotification) -> Result<()> {
         match notification.method.as_str() {
@@ -84,7 +85,7 @@ impl AhpServer {
             _ => Ok(()), // Ignore unknown notifications
         }
     }
-    
+
     async fn handle_handshake(&self, request: AhpRequest) -> AhpResponse {
         match serde_json::from_value::<HandshakeRequest>(request.params) {
             Ok(_handshake_req) => {
@@ -94,55 +95,53 @@ impl AhpServer {
                     session_token: None,
                     config: Some(self.config.clone()),
                 };
-                
+
                 match serde_json::to_value(&response) {
                     Ok(value) => AhpResponse::success(request.id, value),
-                    Err(e) => AhpResponse::error(request.id, -32603, format!("Internal error: {}", e)),
+                    Err(e) => {
+                        AhpResponse::error(request.id, -32603, format!("Internal error: {}", e))
+                    }
                 }
             }
             Err(e) => AhpResponse::error(request.id, -32602, format!("Invalid params: {}", e)),
         }
     }
-    
+
     async fn handle_event_request(&self, request: AhpRequest) -> AhpResponse {
         match serde_json::from_value::<AhpEvent>(request.params) {
-            Ok(event) => {
-                match self.handler.handle_event(&event).await {
-                    Ok(decision) => {
-                        match serde_json::to_value(&decision) {
-                            Ok(value) => AhpResponse::success(request.id, value),
-                            Err(e) => AhpResponse::error(request.id, -32603, format!("Internal error: {}", e)),
-                        }
+            Ok(event) => match self.handler.handle_event(&event).await {
+                Ok(decision) => match serde_json::to_value(&decision) {
+                    Ok(value) => AhpResponse::success(request.id, value),
+                    Err(e) => {
+                        AhpResponse::error(request.id, -32603, format!("Internal error: {}", e))
                     }
-                    Err(e) => AhpResponse::error(request.id, -32603, format!("Handler error: {}", e)),
-                }
-            }
+                },
+                Err(e) => AhpResponse::error(request.id, -32603, format!("Handler error: {}", e)),
+            },
             Err(e) => AhpResponse::error(request.id, -32602, format!("Invalid params: {}", e)),
         }
     }
-    
+
     async fn handle_query_request(&self, request: AhpRequest) -> AhpResponse {
         match serde_json::from_value::<QueryRequest>(request.params) {
-            Ok(query) => {
-                match self.handler.handle_query(&query).await {
-                    Ok(response) => {
-                        match serde_json::to_value(&response) {
-                            Ok(value) => AhpResponse::success(request.id, value),
-                            Err(e) => AhpResponse::error(request.id, -32603, format!("Internal error: {}", e)),
-                        }
+            Ok(query) => match self.handler.handle_query(&query).await {
+                Ok(response) => match serde_json::to_value(&response) {
+                    Ok(value) => AhpResponse::success(request.id, value),
+                    Err(e) => {
+                        AhpResponse::error(request.id, -32603, format!("Internal error: {}", e))
                     }
-                    Err(e) => AhpResponse::error(request.id, -32603, format!("Handler error: {}", e)),
-                }
-            }
+                },
+                Err(e) => AhpResponse::error(request.id, -32603, format!("Handler error: {}", e)),
+            },
             Err(e) => AhpResponse::error(request.id, -32602, format!("Invalid params: {}", e)),
         }
     }
-    
+
     async fn handle_batch_request(&self, request: AhpRequest) -> AhpResponse {
         match serde_json::from_value::<BatchRequest>(request.params) {
             Ok(batch) => {
                 let mut decisions = Vec::new();
-                
+
                 for event in batch.events {
                     match self.handler.handle_event(&event).await {
                         Ok(decision) => decisions.push(decision),
@@ -152,27 +151,29 @@ impl AhpServer {
                         }),
                     }
                 }
-                
+
                 let response = BatchResponse { decisions };
-                
+
                 match serde_json::to_value(&response) {
                     Ok(value) => AhpResponse::success(request.id, value),
-                    Err(e) => AhpResponse::error(request.id, -32603, format!("Internal error: {}", e)),
+                    Err(e) => {
+                        AhpResponse::error(request.id, -32603, format!("Internal error: {}", e))
+                    }
                 }
             }
             Err(e) => AhpResponse::error(request.id, -32602, format!("Invalid params: {}", e)),
         }
     }
-    
+
     /// Run the server with stdio transport (read from stdin, write to stdout)
     pub async fn run_stdio(&self) -> Result<()> {
         use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-        
+
         let stdin = tokio::io::stdin();
         let mut stdout = tokio::io::stdout();
         let mut reader = BufReader::new(stdin);
         let mut line = String::new();
-        
+
         loop {
             line.clear();
             match reader.read_line(&mut line).await {
@@ -185,14 +186,15 @@ impl AhpServer {
                         stdout.write_all(json.as_bytes()).await?;
                         stdout.write_all(b"\n").await?;
                         stdout.flush().await?;
-                    } else if let Ok(notification) = serde_json::from_str::<AhpNotification>(&line) {
+                    } else if let Ok(notification) = serde_json::from_str::<AhpNotification>(&line)
+                    {
                         let _ = self.handle_notification(notification).await;
                     }
                 }
                 Err(_) => break,
             }
         }
-        
+
         Ok(())
     }
 }
