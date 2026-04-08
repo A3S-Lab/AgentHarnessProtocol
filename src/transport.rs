@@ -1,8 +1,11 @@
 //! Transport layer abstractions
 
-use crate::{AhpNotification, AhpRequest, AhpResponse, AuthConfig, Result};
+use crate::{AhpNotification, AhpRequest, AhpResponse, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+
+#[cfg(any(feature = "http", feature = "websocket", feature = "grpc"))]
+use crate::AuthConfig;
 
 /// Transport configuration
 #[derive(Debug, Clone)]

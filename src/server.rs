@@ -3,7 +3,7 @@
 use crate::protocol::{EventContext, HarnessConfig, HarnessInfo, IdleDecision, IdleEvent};
 use crate::{
     AhpError, AhpEvent, AhpNotification, AhpRequest, AhpResponse, BatchRequest, BatchResponse,
-    Decision, EventType, HandshakeRequest, HandshakeResponse, QueryRequest, QueryResponse, Result,
+    Decision, HandshakeRequest, HandshakeResponse, QueryRequest, QueryResponse, Result,
     PROTOCOL_VERSION,
 };
 use async_trait::async_trait;

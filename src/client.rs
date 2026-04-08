@@ -3,9 +3,9 @@
 use crate::protocol::AgentInfo;
 use crate::transport::TransportLayer;
 use crate::{
-    AhpError, AhpEvent, AhpNotification, AhpRequest, AhpResponse, BatchRequest, BatchResponse,
-    Decision, EventType, HandshakeRequest, HandshakeResponse, QueryRequest, QueryResponse, Result,
-    Transport, TransportConfig, PROTOCOL_VERSION,
+    AhpError, AhpEvent, AhpNotification, AhpRequest, BatchRequest, BatchResponse, Decision,
+    EventType, HandshakeRequest, HandshakeResponse, QueryRequest, QueryResponse, Result, Transport,
+    TransportConfig, PROTOCOL_VERSION,
 };
 use std::sync::Arc;
 
@@ -14,7 +14,7 @@ pub struct AhpClient {
     transport: Arc<dyn TransportLayer>,
     session_id: String,
     agent_id: String,
-    config: TransportConfig,
+    _config: TransportConfig,
     handshake_done: std::sync::atomic::AtomicBool,
 }
 
@@ -66,7 +66,7 @@ impl AhpClient {
             transport: transport_layer,
             session_id: uuid::Uuid::new_v4().to_string(),
             agent_id: uuid::Uuid::new_v4().to_string(),
-            config: TransportConfig::default(),
+            _config: TransportConfig::default(),
             handshake_done: std::sync::atomic::AtomicBool::new(false),
         })
     }
@@ -80,7 +80,7 @@ impl AhpClient {
             transport,
             session_id: uuid::Uuid::new_v4().to_string(),
             agent_id: uuid::Uuid::new_v4().to_string(),
-            config: TransportConfig::default(),
+            _config: TransportConfig::default(),
             handshake_done: std::sync::atomic::AtomicBool::new(false),
         }
     }
