@@ -1,6 +1,6 @@
 //! HTTP client example
 
-use a3s_ahp::{AhpClient, AuthConfig, Decision, EventType, Transport};
+use a3s_ahp::{AhpClient, Decision, EventType, Transport};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

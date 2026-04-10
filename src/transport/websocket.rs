@@ -142,7 +142,6 @@ impl WebSocketServer {
     #[cfg(feature = "websocket")]
     pub async fn run(self, addr: impl Into<std::net::SocketAddr>) -> Result<()> {
         use tokio::net::TcpListener;
-        use tokio_tungstenite::accept_async;
 
         let listener = TcpListener::bind(addr.into())
             .await
@@ -226,7 +225,7 @@ mod tests {
     async fn test_websocket_url_with_api_key() {
         // This test just verifies URL construction
         let auth = Some(AuthConfig::api_key("test-key"));
-        let url = "ws://localhost:8080/ahp";
+        let _url = "ws://localhost:8080/ahp";
 
         // In real implementation, this would be tested with a mock server
         // For now, we just verify the auth config is created correctly

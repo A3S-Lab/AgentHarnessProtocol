@@ -62,6 +62,7 @@ async fn main() -> anyhow::Result<()> {
                 "tool_name": "bash",
                 "arguments": { "command": "ls" }
             }),
+            context: None,
             metadata: None,
         },
         a3s_ahp::AhpEvent {
@@ -75,6 +76,7 @@ async fn main() -> anyhow::Result<()> {
                 "tool_name": "bash",
                 "arguments": { "command": "pwd" }
             }),
+            context: None,
             metadata: None,
         },
         a3s_ahp::AhpEvent {
@@ -88,6 +90,7 @@ async fn main() -> anyhow::Result<()> {
                 "tool_name": "bash",
                 "arguments": { "command": "rm -rf /" }  // This should be blocked
             }),
+            context: None,
             metadata: None,
         },
     ];

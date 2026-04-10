@@ -1,11 +1,11 @@
 [package]
 name = "a3s-ahp"
-version = "2.1.0"
+version = "2.2.0"
 edition = "2021"
 authors = ["A3S Lab Team"]
 license = "MIT"
 repository = "https://github.com/A3S-Lab/AgentHarnessProtocol"
-description = "Agent Harness Protocol v2.0 — Universal, transport-agnostic protocol for supervising autonomous AI agents"
+description = "Agent Harness Protocol v2.2 — Universal, transport-agnostic protocol for supervising autonomous AI agents"
 
 [lib]
 name = "a3s_ahp"

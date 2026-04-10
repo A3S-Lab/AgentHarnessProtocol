@@ -10,6 +10,7 @@ use std::sync::Arc;
 pub struct HttpTransport {
     client: Client,
     url: String,
+    #[allow(dead_code)]
     auth: Option<AuthConfig>,
 }
 

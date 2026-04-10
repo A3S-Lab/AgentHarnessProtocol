@@ -71,6 +71,20 @@ pub enum EventType {
     Query,
     Heartbeat,
     Idle,
+    /// Context perception - model needs workspace knowledge (blocking)
+    ContextPerception,
+    /// Operation succeeded (fire-and-forget)
+    Success,
+    /// Memory recall - model needs to retrieve from memory (blocking)
+    MemoryRecall,
+    /// Task planning/decomposition (blocking)
+    Planning,
+    /// Chain-of-thought reasoning (blocking)
+    Reasoning,
+    /// Rate limit triggered
+    RateLimit,
+    /// User confirmation needed
+    Confirmation,
 }
 
 impl EventType {
@@ -78,7 +92,15 @@ impl EventType {
     pub fn is_blocking(&self) -> bool {
         matches!(
             self,
-            EventType::Handshake | EventType::PreAction | EventType::PrePrompt | EventType::Query
+            EventType::Handshake
+                | EventType::PreAction
+                | EventType::PrePrompt
+                | EventType::Query
+                | EventType::ContextPerception
+                | EventType::MemoryRecall
+                | EventType::Planning
+                | EventType::Reasoning
+                | EventType::Confirmation
         )
     }
 }
@@ -97,6 +119,13 @@ impl std::fmt::Display for EventType {
             EventType::Query => write!(f, "query"),
             EventType::Heartbeat => write!(f, "heartbeat"),
             EventType::Idle => write!(f, "idle"),
+            EventType::ContextPerception => write!(f, "context_perception"),
+            EventType::Success => write!(f, "success"),
+            EventType::MemoryRecall => write!(f, "memory_recall"),
+            EventType::Planning => write!(f, "planning"),
+            EventType::Reasoning => write!(f, "reasoning"),
+            EventType::RateLimit => write!(f, "rate_limit"),
+            EventType::Confirmation => write!(f, "confirmation"),
         }
     }
 }
@@ -284,6 +313,24 @@ pub struct HeartbeatEvent {
     pub total_events_processed: u64,
     /// Current agent state
     pub current_state: String,
+    /// CPU usage percentage (0-100)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_percent: Option<f32>,
+    /// Memory usage in bytes
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_bytes: Option<u64>,
+    /// Currently active tool count
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_tools: Option<usize>,
+    /// Pending actions in queue
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_actions: Option<usize>,
+    /// Queue depth
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queue_depth: Option<usize>,
+    /// Tokens used in current session
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tokens_used: Option<i32>,
 }
 
 // ============================================================================
@@ -361,5 +408,551 @@ pub enum IdleDecision {
     Defer {
         #[serde(skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
+    },
+}
+
+// ============================================================================
+// Context Perception (model needs workspace knowledge)
+// ============================================================================
+
+/// Perception intent - why the model needs to perceive context
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PerceptionIntent {
+    /// Recognize: identify or classify an entity
+    /// "What is this?", "What category does this belong to?"
+    Recognize,
+    /// Understand: understand semantics, logic, or behavior
+    /// "What does this mean?", "How does this work?"
+    Understand,
+    /// Locate: find the location or path of a resource
+    /// "Where is X?", "Who can help me find Y?"
+    Locate,
+    /// Retrieve: recall relevant information from accumulated knowledge
+    /// "Was this discussed before?", "I remember last time..."
+    Retrieve,
+    /// Explore: understand the overall structure of an environment or system
+    /// "How is this project/system organized?", "What are the available...?"
+    Explore,
+    /// Reason: infer causality or logic based on existing information
+    /// "Why did this happen?", "What if we change X?"
+    Reason,
+    /// Validate: confirm whether an assumption or state is correct
+    /// "Is this correct?", "Are there any omissions?"
+    Validate,
+    /// Compare: compare similarities and differences between two or more things
+    /// "What's the difference between X and Y?", "Which is better?"
+    Compare,
+    /// Track: get current status or history of a process
+    /// "How far has this task progressed?", "What decisions were made before?"
+    Track,
+}
+
+impl std::fmt::Display for PerceptionIntent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PerceptionIntent::Recognize => write!(f, "recognize"),
+            PerceptionIntent::Understand => write!(f, "understand"),
+            PerceptionIntent::Locate => write!(f, "locate"),
+            PerceptionIntent::Retrieve => write!(f, "retrieve"),
+            PerceptionIntent::Explore => write!(f, "explore"),
+            PerceptionIntent::Reason => write!(f, "reason"),
+            PerceptionIntent::Validate => write!(f, "validate"),
+            PerceptionIntent::Compare => write!(f, "compare"),
+            PerceptionIntent::Track => write!(f, "track"),
+        }
+    }
+}
+
+/// Perception target - what the model wants to perceive
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PerceptionTarget {
+    /// Entity - a specific object or concept
+    Entity {
+        name: String,
+        /// Entity type (e.g., "function", "file", "person", "document", "config", "api")
+        entity_type: String,
+        /// Identifier attribute
+        identifier: Option<String>,
+    },
+    /// Location - a path or place
+    Location {
+        path: String,
+        /// Location type (e.g., "file", "directory", "url", "endpoint", "region")
+        location_type: String,
+    },
+    /// Event - something that happened or will happen
+    Event {
+        description: String,
+        /// Event type (e.g., "change", "action", "decision", "error", "meeting")
+        event_type: String,
+        /// Related time range
+        time_range: Option<TimeRange>,
+    },
+    /// Relation - connections between multiple entities
+    Relation {
+        entities: Vec<String>,
+        /// Relation type (e.g., "dependency", "ownership", "sequence", "conflict")
+        relation_type: String,
+    },
+    /// Rule - a policy, strategy, or convention
+    Rule {
+        name: String,
+        /// Rule type (e.g., "policy", "convention", "constraint", "requirement")
+        rule_type: String,
+        /// Applicable scope
+        scope: Option<String>,
+    },
+    /// State - current condition of a system or entity
+    State {
+        target: String,
+        aspect: String,
+        include_history: bool,
+    },
+    /// Resource - an available capability or asset
+    Resource {
+        name: String,
+        /// Resource type (e.g., "tool", "skill", "api", "data", "personnel")
+        resource_type: String,
+        constraints: Option<serde_json::Value>,
+    },
+    /// Pattern - a recurring phenomenon or rule
+    Pattern {
+        pattern: String,
+        /// Pattern type (e.g., "text", "regex", "structure", "behavior")
+        pattern_type: String,
+    },
+}
+
+/// Time range for events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeRange {
+    pub from: Option<i64>,
+    pub to: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relative: Option<String>,
+}
+
+/// Perception domain - the domain of the current task
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PerceptionDomain {
+    Coding,
+    Writing,
+    DataAnalysis,
+    Research,
+    ProjectManagement,
+    Conversation,
+    Operations,
+    Security,
+    General,
+}
+
+impl Default for PerceptionDomain {
+    fn default() -> Self {
+        PerceptionDomain::General
+    }
+}
+
+/// Perception modality - the form of information needed
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PerceptionModality {
+    Text,
+    Code,
+    StructuredData,
+    Table,
+    Chart,
+    Image,
+    Audio,
+    Video,
+    Any,
+}
+
+impl Default for PerceptionModality {
+    fn default() -> Self {
+        PerceptionModality::Any
+    }
+}
+
+/// Quality requirement for perception
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PerceptionUrgency {
+    /// Must have - cannot proceed without this context
+    Critical,
+    /// Important - significantly improves response quality
+    High,
+    /// Normal - helpful but not essential
+    Normal,
+    /// Low - can be cached or delayed
+    Low,
+}
+
+impl Default for PerceptionUrgency {
+    fn default() -> Self {
+        PerceptionUrgency::Normal
+    }
+}
+
+/// Freshness requirement for perceived data
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PerceptionFreshness {
+    /// Need realtime data (e.g., git status, filesystem)
+    Realtime,
+    /// Need recent data (e.g., recent policy changes)
+    Recent,
+    /// Static data is sufficient (e.g., code structure, archives)
+    Static,
+}
+
+impl Default for PerceptionFreshness {
+    fn default() -> Self {
+        PerceptionFreshness::Static
+    }
+}
+
+/// Constraints for perception
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerceptionConstraints {
+    #[serde(default)]
+    pub max_results: Option<usize>,
+    #[serde(default)]
+    pub max_context_length: Option<usize>,
+    #[serde(default = "default_include_sources")]
+    pub include_sources: bool,
+}
+
+fn default_include_sources() -> bool {
+    true
+}
+
+impl Default for PerceptionConstraints {
+    fn default() -> Self {
+        Self {
+            max_results: None,
+            max_context_length: None,
+            include_sources: true,
+        }
+    }
+}
+
+/// Current perception context
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerceptionContext {
+    pub workspace: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_task: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relevant_history: Option<Vec<HistoryItem>>,
+}
+
+/// History item
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoryItem {
+    pub item_type: String,
+    pub content: String,
+    pub timestamp: i64,
+}
+
+/// Context perception event - fired when model needs workspace knowledge
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextPerceptionEvent {
+    pub session_id: String,
+    pub intent: PerceptionIntent,
+    pub target: PerceptionTarget,
+    #[serde(default)]
+    pub domain: PerceptionDomain,
+    #[serde(default)]
+    pub preferred_modality: PerceptionModality,
+    #[serde(default)]
+    pub urgency: PerceptionUrgency,
+    #[serde(default)]
+    pub freshness: PerceptionFreshness,
+    pub context: PerceptionContext,
+    #[serde(default)]
+    pub constraints: PerceptionConstraints,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<HashMap<String, serde_json::Value>>,
+}
+
+/// Injected context from harness
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InjectedContext {
+    pub facts: Vec<Fact>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_contents: Option<Vec<FileContentSnippet>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_summary: Option<ProjectSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub knowledge: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggestions: Option<Vec<String>>,
+}
+
+/// File content snippet
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileContentSnippet {
+    pub path: String,
+    pub snippet: String,
+    pub relevance_score: f32,
+}
+
+/// Project summary
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectSummary {
+    pub project_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_files: Option<Vec<String>>,
+    pub structure_description: String,
+}
+
+/// Decision for context perception events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "decision", rename_all = "lowercase")]
+pub enum ContextPerceptionDecision {
+    /// Provide context and continue
+    Allow {
+        injected_context: InjectedContext,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        metadata: Option<HashMap<String, serde_json::Value>>,
+    },
+    /// Skip context injection
+    Block {
+        reason: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        metadata: Option<HashMap<String, serde_json::Value>>,
+    },
+    /// Request more specific context
+    Refine {
+        refined_intent: Option<PerceptionIntent>,
+        refined_target: Option<PerceptionTarget>,
+        scope_hints: Vec<String>,
+    },
+}
+
+// ============================================================================
+// Memory Recall Events
+// ============================================================================
+
+/// Memory recall event - model needs to retrieve from memory
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryRecallEvent {
+    pub session_id: String,
+    pub query: String,
+    pub memory_type: String,
+    pub max_results: usize,
+    pub working_directory: String,
+}
+
+/// Decision for memory recall events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "decision", rename_all = "lowercase")]
+pub enum MemoryRecallDecision {
+    /// Allow recall and provide facts
+    Allow {
+        injected_facts: Vec<Fact>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        metadata: Option<HashMap<String, serde_json::Value>>,
+    },
+    /// Block recall
+    Block {
+        reason: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        metadata: Option<HashMap<String, serde_json::Value>>,
+    },
+}
+
+// ============================================================================
+// Planning Events
+// ============================================================================
+
+/// Planning strategy
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlanningStrategy {
+    None,
+    StepByStep,
+    TreeOfThoughts,
+    GraphPlanning,
+    Custom(String),
+}
+
+/// Planning event - model is doing task planning
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlanningEvent {
+    pub session_id: String,
+    pub task_description: String,
+    pub available_strategies: Vec<PlanningStrategy>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub constraints: Option<serde_json::Value>,
+}
+
+/// Decision for planning events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "decision", rename_all = "lowercase")]
+pub enum PlanningDecision {
+    /// Allow planning with strategy
+    Allow {
+        selected_strategy: PlanningStrategy,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        planning_template: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        metadata: Option<HashMap<String, serde_json::Value>>,
+    },
+    /// Block planning
+    Block {
+        reason: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        metadata: Option<HashMap<String, serde_json::Value>>,
+    },
+    /// Modify planning parameters
+    Modify {
+        modified_task: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        hints: Option<Vec<String>>,
+    },
+}
+
+// ============================================================================
+// Reasoning Events
+// ============================================================================
+
+/// Reasoning type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReasoningType {
+    ChainOfThought,
+    TreeOfThoughts,
+    ReAct,
+    Reflexion,
+    Other(String),
+}
+
+/// Reasoning event - model is doing chain-of-thought reasoning
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReasoningEvent {
+    pub session_id: String,
+    pub reasoning_type: ReasoningType,
+    pub problem_statement: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hints: Option<Vec<String>>,
+}
+
+/// Decision for reasoning events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "decision", rename_all = "lowercase")]
+pub enum ReasoningDecision {
+    /// Allow reasoning with hints
+    Allow {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        hints: Option<Vec<String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        metadata: Option<HashMap<String, serde_json::Value>>,
+    },
+    /// Block reasoning
+    Block {
+        reason: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        metadata: Option<HashMap<String, serde_json::Value>>,
+    },
+}
+
+// ============================================================================
+// Success Event
+// ============================================================================
+
+/// Success event - operation succeeded
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SuccessEvent {
+    pub session_id: String,
+    pub action_type: String,
+    pub action_summary: String,
+    pub duration_ms: u64,
+}
+
+// ============================================================================
+// Rate Limit Event
+// ============================================================================
+
+/// Rate limit type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RateLimitType {
+    LlmTokenLimit,
+    LlmRequestLimit,
+    ApiRequestLimit,
+    ToolExecutionLimit,
+    Custom(String),
+}
+
+/// Rate limit event - rate limit triggered
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RateLimitEvent {
+    pub session_id: String,
+    pub limit_type: RateLimitType,
+    pub retry_after_ms: u64,
+    pub current_usage: String,
+}
+
+/// Decision for rate limit events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "decision", rename_all = "lowercase")]
+pub enum RateLimitDecision {
+    /// Retry after delay
+    Retry {
+        retry_after_ms: u64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        metadata: Option<HashMap<String, serde_json::Value>>,
+    },
+    /// Queue the request
+    Queue,
+    /// Skip the action
+    Skip {
+        reason: String,
+    },
+}
+
+// ============================================================================
+// Confirmation Event
+// ============================================================================
+
+/// Confirmation type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfirmationType {
+    SafetyConfirm,
+    UserConfirm,
+    CostConfirm,
+    Custom(String),
+}
+
+/// Confirmation event - user confirmation needed
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfirmationEvent {
+    pub session_id: String,
+    pub confirmation_type: ConfirmationType,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub options: Option<Vec<String>>,
+}
+
+/// Decision for confirmation events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "decision", rename_all = "lowercase")]
+pub enum ConfirmationDecision {
+    /// Escalate to human
+    Escalate,
+    /// Approved
+    Approve,
+    /// Rejected
+    Reject {
+        reason: String,
     },
 }

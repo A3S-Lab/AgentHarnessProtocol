@@ -40,8 +40,8 @@
 //! })).await?;
 //!
 //! match decision {
-//!     Decision::Allow => println!("Action allowed"),
-//!     Decision::Block { reason } => println!("Action blocked: {}", reason),
+//!     Decision::Allow { .. } => println!("Action allowed"),
+//!     Decision::Block { reason, .. } => println!("Action blocked: {}", reason),
 //!     _ => {}
 //! }
 //! # Ok(())
@@ -60,15 +60,20 @@ pub use auth::{AuthConfig, AuthMethod};
 pub use client::AhpClient;
 pub use error::{AhpError, Result};
 pub use protocol::{
-    AhpEvent, AhpNotification, AhpRequest, AhpResponse, BatchRequest, BatchResponse, Decision,
-    EventContext, EventType, Fact, HandshakeRequest, HandshakeResponse, HeartbeatEvent,
-    IdleDecision, IdleEvent, MemorySummary, QueryRequest, QueryResponse, SessionStats,
+    AhpEvent, AhpNotification, AhpRequest, AhpResponse, BatchRequest, BatchResponse,
+    ConfirmationDecision, ContextPerceptionDecision, ContextPerceptionEvent, Decision,
+    EventContext, EventType, Fact, FileContentSnippet, HandshakeRequest, HandshakeResponse,
+    HeartbeatEvent, HistoryItem, IdleDecision, IdleEvent, InjectedContext, MemoryRecallDecision,
+    MemoryRecallEvent, MemorySummary, PerceptionConstraints, PerceptionContext, PerceptionDomain,
+    PerceptionFreshness, PerceptionIntent, PerceptionModality, PerceptionTarget, PerceptionUrgency,
+    PlanningDecision, PlanningEvent, ProjectSummary, QueryRequest, QueryResponse, RateLimitDecision,
+    RateLimitEvent, ReasoningDecision, ReasoningEvent, SessionStats, SuccessEvent, TimeRange,
 };
 pub use server::AhpServer;
 pub use transport::{Transport, TransportConfig};
 
 /// Protocol version
-pub const PROTOCOL_VERSION: &str = "2.0";
+pub const PROTOCOL_VERSION: &str = "2.2";
 
 /// Default timeout for blocking requests (milliseconds)
 pub const DEFAULT_TIMEOUT_MS: u64 = 10_000;
