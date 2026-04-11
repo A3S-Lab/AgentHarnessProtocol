@@ -1,4 +1,4 @@
-# Agent Harness Protocol (AHP) v2.2
+# Agent Harness Protocol (AHP) v2.3
 
 **Universal supervision protocol for autonomous AI agents**
 
@@ -79,7 +79,7 @@ AHP defines **one protocol** that any agent framework can implement. Once an age
 
 ## Harness Points (驾驭点)
 
-AHP v2.2 introduces **harness points** — structured hooks that intercept agent operations at specific moments.
+AHP v2.3 introduces **harness points** — structured hooks that intercept agent operations at specific moments.
 
 ### Event Flow Diagram
 
@@ -556,8 +556,8 @@ ahp/
 
 ## Version
 
-- **Protocol:** 2.2
-- **This crate:** 2.2.0
+- **Protocol:** 2.3
+- **This crate:** 2.3.0
 
 ## License
 
