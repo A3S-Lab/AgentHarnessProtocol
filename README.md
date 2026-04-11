@@ -55,6 +55,7 @@ AHP defines **one protocol** that any agent framework can implement. Once an age
 | `post_action` | After action completes | No |
 | `pre_prompt` | Before LLM call | Yes |
 | `post_response` | After LLM response | No |
+| `intent_detection` | Detect user intent from prompt | Yes |
 | `context_perception` | Model needs workspace knowledge | Yes |
 | `memory_recall` | Model retrieves from memory | Yes |
 | `planning` | Task decomposition | Yes |
@@ -276,6 +277,102 @@ When the model needs to understand its workspace, `context_perception` fires. Th
       │  into model                    │                               │
       │ ◀──────────────────────────────│                               │
       │                                │                               │
+```
+
+## Intent Detection (意图检测)
+
+`intent_detection` fires on **every prompt** before `context_perception`. The harness determines the user's intent using LLM classification, keyword matching, or any custom logic. This enables:
+
+- **Multi-language intent recognition** — Harness can use LLM for non-English prompts
+- **Centralized intent taxonomy** — Update detection logic without changing agent code
+- **Custom detection rules** — Organization-specific intent patterns
+
+### Intent Values
+
+| Intent | Triggered By | Description |
+|--------|-------------|-------------|
+| `locate` | "where is", "find", "search for" | User wants to find files/functions |
+| `understand` | "how does", "explain", "what does" | User wants to understand code |
+| `retrieve` | "remember", "earlier", "previous" | User references past context |
+| `explore` | "project structure", "what files" | User wants overview |
+| `reason` | "why did", "why is", "cause" | User asks why something happened |
+| `validate` | "verify", "check if", "debug" | User wants to verify correctness |
+| `compare` | "difference between", "compare" | User wants comparison |
+| `track` | "status", "progress", "history" | User asks for status |
+
+### IntentDetection Flow
+
+```
+    Agent                          AHP Client                      Harness
+      │                                │                               │
+      │  User prompt                  │                               │
+      │  ────────────────────────────▶│                               │
+      │                                │                               │
+      │                     ┌──────────┴──────────┐                    │
+      │                     │ IntentDetection    │                    │
+      │                     │  event created    │                    │
+      │                     │  - prompt        │                    │
+      │                     │  - workspace     │                    │
+      │                     │  - language_hint │                    │
+      │                     └──────────┬──────────┘                    │
+      │                                │                               │
+      │                                │  AhpEvent                     │
+      │                                │  (blocking)                   │
+      │                                │──────────────────────────────▶│
+      │                                │                               │
+      │                                │                 ┌────────────┴────────┐
+      │                                │                 │ LLM classification │
+      │                                │                 │ or custom logic   │
+      │                                │                 └────────────┬────────┘
+      │                                │                               │
+      │                                │  Decision {                    │
+      │                                │    decision: "allow",         │
+      │                                │    detected_intent: "locate",│
+      │                                │    confidence: 0.95,         │
+      │                                │    target_hints: {           │
+      │                                │      target_type: "function",│
+      │                                │      target_name: "auth"    │
+      │                                │    }                        │
+      │                                │  }                          │
+      │                                │◀─────────────────────────────│
+      │                                │                               │
+      │  Intent detected              │                               │
+      │  + PreContextPerception       │                               │
+      │  follows with full context    │                               │
+      │ ◀──────────────────────────────│                              │
+      │                                │                               │
+```
+
+### IntentDetection Decision Types
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        INTENT DETECTION DECISION                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   ALLOW (intent detected)                                                   │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │  {                                                                  │  │
+│   │    "decision": "allow",                                             │  │
+│   │    "detected_intent": "locate",                                    │  │
+│   │    "confidence": 0.95,                                              │  │
+│   │    "target_hints": {                                                │  │
+│   │      "target_type": "function",                                     │  │
+│   │      "target_name": "authenticate",                                 │  │
+│   │      "domain": "coding"                                             │  │
+│   │    }                                                                │  │
+│   │  }                                                                  │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│   BLOCK (skip context perception)                                            │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │  {                                                                  │  │
+│   │    "decision": "block",                                             │  │
+│   │    "reason": "intent detection disabled by policy"                 │  │
+│   │  }                                                                  │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### ContextPerception Decision Types
