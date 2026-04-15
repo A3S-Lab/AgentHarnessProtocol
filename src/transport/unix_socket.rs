@@ -13,7 +13,7 @@ use tokio::sync::{oneshot, Mutex};
 /// Unix socket transport - communicates with server via Unix domain socket
 pub struct UnixSocketTransport {
     writer: Arc<Mutex<tokio::io::WriteHalf<UnixStream>>>,
-    _reader_task: Arc<()>, // Keeps the reader half alive
+    _reader_task: Arc<tokio::task::JoinHandle<()>>, // Keeps the reader half alive
     pending_requests: Arc<Mutex<HashMap<String, oneshot::Sender<AhpResponse>>>>,
 }
 
