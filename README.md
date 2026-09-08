@@ -1,5 +1,12 @@
 # Agent Harness Protocol (AHP) v2.4
 
+
+<p align="center">
+  <strong>Language / 语言:</strong>
+  <a href="README.md">English</a> ·
+  <a href="README.zh-CN.md">中文</a>
+</p>
+
 **A transport-agnostic supervision protocol for autonomous AI agents.**
 
 AHP separates agent execution from policy enforcement. An agent emits structured
